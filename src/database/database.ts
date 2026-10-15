@@ -11,7 +11,15 @@ export async function initDatabase(db: SQLiteDatabase): Promise<void> {
             amount REAL NOT NULL,
             category TEXT NOT NULL,
             date TEXT NOT NULL,
-            description TEXT
+            description TEXT,
+            invoice_uri TEXT
         );
     `);
+
+    const columns = await db.getAllAsync<{ name: string }>(
+        'PRAGMA table_info(expenses)'
+    );
+    if (!columns.some((column) => column.name === 'invoice_uri')) {
+        await db.execAsync('ALTER TABLE expenses ADD COLUMN invoice_uri TEXT;');
+    }
 }

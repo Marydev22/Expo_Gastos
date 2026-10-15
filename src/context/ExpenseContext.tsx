@@ -2,7 +2,13 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Expense } from '@/types/expense';
 import { useSQLiteContext } from 'expo-sqlite';
-import { getAllExpenses, insertExpense } from '@/database/expenseRepository';
+import {
+  deleteExpense as deleteExpenseFromDatabase,
+  getAllExpenses,
+  insertExpense,
+  updateExpense as updateExpenseInDatabase,
+} from '@/database/expenseRepository';
+import { deleteInvoiceImage } from '@/utils/imageHelper';
  
 interface ExpenseContextType {
   expenses: Expense[];
@@ -10,8 +16,11 @@ interface ExpenseContextType {
   isLoading: boolean;
   // Ahora devuelve una Promise porque guardar en el telefono es asincrono
   addExpense: (expense: Omit<Expense, 'id'>) => Promise<void>;
+  updateExpense: (expense: Expense) => Promise<void>;
+  deleteExpense: (expenseId: string) => Promise<void>;
   getMonthlyTotal: () => number;
   getCurrentMonthExpenses: () => Expense[];
+  getSortedExpenses: (sortBy: 'amount' | 'date', order?: 'asc' | 'desc') => Expense[];
 }
  
 // Arranca en undefined para poder avisar si alguien usa el hook sin Provider
@@ -80,6 +89,37 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
       0
     );
   };
+
+  const updateExpense = async (expense: Expense) => {
+    await updateExpenseInDatabase(db, expense);
+    setExpenses((prev) => prev.map((item) => item.id === expense.id ? expense : item));
+  };
+
+  const deleteExpense = async (expenseId: string) => {
+    const expense = expenses.find((item) => item.id === expenseId);
+
+    // Primero se borra la fila en SQLite; si eso falla nada mas cambio
+    await deleteExpenseFromDatabase(db, expenseId);
+
+    // Despues el comprobante asociado (si tenia)
+    if (expense?.invoice_uri) {
+      await deleteInvoiceImage(expense.invoice_uri);
+    }
+
+    setExpenses((prev) => prev.filter((item) => item.id !== expenseId));
+  };
+
+  const getSortedExpenses = (
+    sortBy: 'amount' | 'date',
+    order: 'asc' | 'desc' = 'desc'
+  ) => {
+    return [...getCurrentMonthExpenses()].sort((a, b) => {
+      const comparison = sortBy === 'amount'
+        ? a.amount - b.amount
+        : new Date(a.date).getTime() - new Date(b.date).getTime();
+      return order === 'asc' ? comparison : -comparison;
+    });
+  };
  
   return (
     <ExpenseContext.Provider
@@ -87,8 +127,11 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
         expenses,
         isLoading,
         addExpense,
+        updateExpense,
+        deleteExpense,
         getMonthlyTotal,
         getCurrentMonthExpenses,
+        getSortedExpenses,
       }}
     >
       {children}

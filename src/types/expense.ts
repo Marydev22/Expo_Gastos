@@ -17,6 +17,7 @@ export interface Expense {
   category: Category;
   date: Date;
   description?: string;
+  invoice_uri?: string;
 }
 
 // Mismo orden en que se muestran en el selector del modal

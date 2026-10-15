@@ -6,14 +6,24 @@ import { StatusBar } from 'expo-status-bar';
 import { MonthlyHeader } from '@/components/MonthlyHeader';
 import { ExpenseItem } from '@/components/ExpenseItem';
 import { AddExpenseModal } from '@/components/AddExpenseModal';
+import { EditExpenseModal } from '@/components/EditExpenseModal';
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
+import { InvoicePreviewModal } from '@/components/InvoicePreviewModal';
+import { Expense } from '@/types/expense';
 import { useExpenses } from '@/context/ExpenseContext';
 import { LiquidGlassColors, Spacing } from '@/constants/theme';
 
 // Pantalla principal: total del mes, lista de gastos y el boton + para agregar
 export default function HomeScreen() {
-  const { getCurrentMonthExpenses, isLoading } = useExpenses();
+  const { getCurrentMonthExpenses, getSortedExpenses, isLoading } = useExpenses();
   const [modalVisible, setModalVisible] = useState(false);
-  const expenses = getCurrentMonthExpenses();
+  const [sortOrder, setSortOrder] = useState<'date' | 'amount-desc' | 'amount-asc'>('date');
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
+  const [previewInvoice, setPreviewInvoice] = useState<string | null>(null);
+  const expenses = sortOrder === 'date'
+    ? getCurrentMonthExpenses()
+    : getSortedExpenses('amount', sortOrder === 'amount-asc' ? 'asc' : 'desc');
 
   return (
     <View style={styles.container}>
@@ -30,6 +40,14 @@ export default function HomeScreen() {
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.content}>
             <Text style={styles.appTitle}>Gastos Poliestudiante</Text>
+            <TouchableOpacity
+              style={styles.filterButton}
+              onPress={() => setSortOrder((current) => current === 'date' ? 'amount-desc' : current === 'amount-desc' ? 'amount-asc' : 'date')}
+            >
+              <Text style={styles.filterText}>
+                {sortOrder === 'date' ? '📅 Fecha' : sortOrder === 'amount-desc' ? '↓ Mayor monto' : '↑ Menor monto'}
+              </Text>
+            </TouchableOpacity>
 
             <MonthlyHeader />
 
@@ -53,7 +71,13 @@ export default function HomeScreen() {
                 data={expenses}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item, index }) => (
-                  <ExpenseItem expense={item} index={index} />
+                  <ExpenseItem
+                    expense={item}
+                    index={index}
+                    onEdit={setEditingExpense}
+                    onDelete={setDeletingExpense}
+                    onViewInvoice={setPreviewInvoice}
+                  />
                 )}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
@@ -80,6 +104,22 @@ export default function HomeScreen() {
           <AddExpenseModal
             visible={modalVisible}
             onClose={() => setModalVisible(false)}
+          />
+          <EditExpenseModal
+            key={editingExpense?.id ?? 'edit-expense'}
+            visible={editingExpense !== null}
+            expense={editingExpense}
+            onClose={() => setEditingExpense(null)}
+          />
+          <DeleteConfirmationDialog
+            visible={deletingExpense !== null}
+            expense={deletingExpense}
+            onClose={() => setDeletingExpense(null)}
+          />
+          <InvoicePreviewModal
+            visible={previewInvoice !== null}
+            uri={previewInvoice}
+            onClose={() => setPreviewInvoice(null)}
           />
         </SafeAreaView>
       </LinearGradient>
@@ -133,6 +173,20 @@ const styles = StyleSheet.create({
     color: LiquidGlassColors.glassText,
     marginBottom: Spacing.three,
     textAlign: 'center',
+  },
+  filterButton: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Spacing.two,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderWidth: 1,
+    borderColor: LiquidGlassColors.glassBorder,
+    marginBottom: Spacing.two,
+  },
+  filterText: {
+    color: LiquidGlassColors.glassText,
+    fontWeight: '600',
   },
   listContent: {
     paddingBottom: 100,
